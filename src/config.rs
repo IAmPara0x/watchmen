@@ -8,6 +8,7 @@ pub struct WatchmenConfig {
     pub bot_token: String,
     pub server_addr: String,
     pub poll_interval: u64,
+    pub max_retries: u64
 }
 
 impl WatchmenConfig {

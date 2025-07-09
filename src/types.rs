@@ -12,7 +12,9 @@ pub struct WatchmenState<T: Notify> {
     pub pinger: Pinger,
     pub server_status: Status,
     pub interval: Duration,
-    pub services: Vec<T>
+    pub services: Vec<T>,
+    pub num_retries: u64,
+    pub max_retries: u64
 }
 
 
@@ -21,7 +23,7 @@ impl <T: Notify> WatchmenState<T> {
     pub async fn new(client: &Client, config: &WatchmenConfig ) -> Option<WatchmenState<T>> {
 
         let pinger = client.pinger(config.server_addr.parse().ok()?, PingIdentifier(1)).await;
-        let state = WatchmenState {pinger: pinger, server_status: Status::Offline, interval: Duration::from_secs(config.poll_interval), services: vec![] };
+        let state = WatchmenState {pinger, server_status: Status::Offline, interval: Duration::from_secs(config.poll_interval), services: vec![], max_retries: config.max_retries, num_retries: 0 };
         Some(state)
     }
 
@@ -37,16 +39,25 @@ impl <T: Notify> WatchmenState<T> {
         if self.server_status == Status::Offline {
             self.all_services_notify(&"Server is back online again!".to_string()).await;
             self.server_status = Status::Online;
+            self.num_retries = 0;
         }
     }
 
     async fn handle_offline(&mut self) {
 
         println!("Handling offline...");
+
         if self.server_status == Status::Online {
-            self.all_services_notify(&"Server is offline!".to_string()).await;
-            self.server_status = Status::Offline;
+            if self.num_retries == self.max_retries {
+                self.all_services_notify(&"Server is offline!".to_string()).await;
+                self.server_status = Status::Offline;
+            } else {
+
+                println!("Increasing the retry count to: {:?}", self.num_retries);
+                self.num_retries += 1
+            }
         }
+
     }
 
     pub async fn watch(&mut self) -> () {
